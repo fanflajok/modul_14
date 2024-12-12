@@ -8,7 +8,7 @@ from crud_functions import *
 
 
 
-api = ''
+api = '7639537460:AAF9zBGRqAd3j_wiHGRjIsHtxJ3qddpX_R4'
 bot = Bot(token=api)
 dp = Dispatcher(bot, storage=MemoryStorage())
 
@@ -18,11 +18,12 @@ kb = ReplyKeyboardMarkup(resize_keyboard = True)
 bu1 = KeyboardButton(text = 'Рассчитать')
 bu2 = KeyboardButton(text = 'Информация')
 bu3 = KeyboardButton(text = 'Купить')
+bu4 = KeyboardButton(text = 'Регистрация')
 
 kb.add(bu1)
 kb.add(bu2)
 kb.add(bu3)
-
+kb.add(bu4)
 
 
 kbinl = InlineKeyboardMarkup()
@@ -61,16 +62,23 @@ class UserState(StatesGroup):
     weight = State()
     sex = State()
 
+class RegistrationState(StatesGroup):
+    username = State()
+    email = State()
+    age = State()
+    balance = State()
 
 
 
-@dp.message_handler(commands=['start'])
-async def start(message):
-     await message.answer('Привет! Я бот помогающий твоему здоровью.', reply_markup = kb)
+
+@dp.message_handler(commands=['start'], state='*')
+async def start(message, state):
+    await state.finish()
+    await message.answer('Привет! Я бот, помогающий твоему здоровью.', reply_markup=kb)
 
 @dp.message_handler(text = 'Информация')
 async def info(message):
-    await message.answer('Пока я умею только считать норму твоих калорий и якобы продавать колёса')
+    await message.answer('Я умею регистрировать, считать норму потребления калорий, и продавать товары')
 
 
 @dp.message_handler(text = 'Купить')
@@ -86,6 +94,11 @@ async def get_buying_list(message):
             count_of_pic +=1
     await message.answer('Выберите продукт для покупки:', reply_markup = kbinl2)
 
+@dp.callback_query_handler(text = 'product_buying')
+async def send_confirm_message(call):
+    await call.message.answer('Вы успешно приобрели продукт!')
+    await call.answer()
+
 
 @dp.message_handler(text='Рассчитать')
 async def main_menu(message):
@@ -97,10 +110,45 @@ async def get_formulas(call):
                             'Для женщин: 10 x вес (кг) + 6,25 x рост (см) – 5 x возраст (г) – 161.')
     await call.answer()
 
-@dp.callback_query_handler(text = 'product_buying')
-async def send_confirm_message(call):
-    await call.message.answer('Вы успешно приобрели продукт!')
-    await call.answer()
+
+
+
+@dp.message_handler(text = 'Регистрация')
+async def sing_up(message):
+    await message.answer('Введите имя пользователя (только латинский алфавит):')
+    await RegistrationState.username.set()
+
+@dp.message_handler(state = RegistrationState.username)
+async def set_username(message, state):
+    if not is_included(username = message.text) and checked_is_english(data_for_sql = message.text):
+        await state.update_data(username = message.text)
+        await message.answer('Введите свой email:')
+        await RegistrationState.email.set()
+    else:
+        await message.answer('Пользователь существует или введены некорректные данные, введите другое имя')
+
+
+@dp.message_handler(state = RegistrationState.email)
+async def set_email(message, state):
+    if not is_included_mail(email = message.text):
+        await state.update_data(email = message.text)
+        await message.answer('Введите свой возраст:')
+        await RegistrationState.age.set()
+    else:
+        await message.answer('email существует, введите другой email')
+
+@dp.message_handler(state = RegistrationState.age)
+async def set_age(message, state):
+    try:
+        if isinstance_checked(messages_for_calc_or_registration=int(message.text)):
+            await state.update_data(age = message.text)
+            await message.answer('Регистрация прошла успешно')
+            await RegistrationState.age.set()
+            data = await state.get_data()
+            add_user(data['username'], data['email'], data['age'])
+            await state.finish()
+    except ValueError:
+            await message.answer('Введите корректные данные')
 
 
 @dp.callback_query_handler(text='calories')
@@ -111,21 +159,33 @@ async def set_age(call):
 
 @dp.message_handler(state = UserState.age)
 async def set_growth(message, state):
-    await state.update_data(age = message.text)
-    await message.answer('Введите свой рост:')
-    await UserState.growth.set()
+    try:
+        if isinstance_checked(messages_for_calc_or_registration = int(message.text)):
+            await state.update_data(age = message.text)
+            await message.answer('Введите свой рост:')
+            await UserState.growth.set()
+    except ValueError:
+        await message.answer('Введите корректное значение возраста:')
 
 @dp.message_handler(state = UserState.growth)
 async def set_weight(message, state):
-    await state.update_data(growth = message.text)
-    await message.answer('Введите свой вес:')
-    await UserState.weight.set()
+    try:
+        if isinstance_checked(messages_for_calc_or_registration=int(message.text)):
+            await state.update_data(growth = message.text)
+            await message.answer('Введите свой вес:')
+            await UserState.weight.set()
+    except ValueError:
+        await message.answer('Введите корректное значение роста:')
 
 @dp.message_handler(state = UserState.weight)
 async def set_sex(message, state):
-    await state.update_data(weight=message.text)
-    await message.answer('Введите свой пол:', reply_markup = kbinl3)
-    await UserState.sex.set()
+    try:
+        if isinstance_checked(messages_for_calc_or_registration=int(message.text)):
+            await state.update_data(weight=message.text)
+            await message.answer('Введите свой пол:', reply_markup = kbinl3)
+            await UserState.sex.set()
+    except ValueError:
+        await message.answer('Введите корректное значение веса:')
 
 @dp.callback_query_handler(state = UserState.sex, text = 'М')
 async def calc_for_men(call, state):
@@ -140,8 +200,6 @@ async def calc_for_women(call, state):
     calories_for_women = (10*int(data['weight']) + 6.25*int(data['growth']) - 5*int(data['age']))-161
     await call.message.answer(f'Ваша норма калорий: {calories_for_women}ккал/сут')
     await state.finish()
-
-
 
 
 if __name__ == '__main__':
