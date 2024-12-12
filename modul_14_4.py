@@ -8,7 +8,7 @@ from crud_functions import *
 
 
 
-api = '7639537460:AAF9zBGRqAd3j_wiHGRjIsHtxJ3qddpX_R4'
+api = ''
 bot = Bot(token=api)
 dp = Dispatcher(bot, storage=MemoryStorage())
 
